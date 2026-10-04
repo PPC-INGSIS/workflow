@@ -26,6 +26,8 @@ Acá los pasos se definen **una vez**, y cada servicio los llama en una línea.
 
 Corre con `--continue`: si fallan varias verificaciones, el log las muestra todas en una sola corrida, no solo la primera.
 
+Le pasa a Gradle las credenciales para bajar paquetes de GitHub Packages (`GITHUB_ACTOR` y `GITHUB_TOKEN`), con el token que GitHub crea para cada corrida. No hay que configurar ningún secreto.
+
 ## Cómo usarlo en un servicio
 
 En el repo del servicio, `.github/workflows/ci.yml`:
@@ -39,7 +41,7 @@ on:
 
 jobs:
   check:
-    uses: PPC-INGSIS/workflow/.github/workflows/gradle-check.yml@v1
+    uses: PPC-INGSIS/workflow/.github/workflows/gradle-check.yml@v2
 ```
 
 Para compilar con otra versión de Java:
@@ -47,7 +49,7 @@ Para compilar con otra versión de Java:
 ```yaml
 jobs:
   check:
-    uses: PPC-INGSIS/workflow/.github/workflows/gradle-check.yml@v1
+    uses: PPC-INGSIS/workflow/.github/workflows/gradle-check.yml@v2
     with:
       java-version: "17"
 ```
@@ -61,17 +63,17 @@ jobs:
 
 ## Versiones
 
-Los servicios llaman a una **versión fija** (`@v1`), no a `@main`. Así, un cambio en este repo no rompe a todos los servicios a la vez: cada uno pasa a la versión nueva cuando quiere.
+Los servicios llaman a una **versión fija** (`@v2`), no a `@main`. Así, un cambio en este repo no rompe a todos los servicios a la vez: cada uno pasa a la versión nueva cuando quiere.
 
 | Referencia | Apunta a | Cuándo usarla |
 |---|---|---|
-| `@v1` | Un commit fijo | Siempre, en los servicios |
+| `@v2` | Un commit fijo | Siempre, en los servicios |
 | `@main` | El último commit | Solo para probar un cambio antes de taggearlo |
 
 **Publicar una versión nueva:**
 
 1. Probar el cambio llamándolo con `@main` desde un pull request de un servicio.
-2. Si funciona, crear el tag: `git tag v2 && git push origin v2`.
+2. Si funciona, crear el tag: `git tag v3 && git push origin v3`.
 3. Actualizar la referencia en cada servicio.
 
 Un cambio compatible, como agregar un input opcional, no rompe a quienes ya lo usan. Un cambio incompatible, como renombrar un input o hacerlo obligatorio, va con un número de versión nuevo.

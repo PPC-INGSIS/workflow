@@ -11,6 +11,10 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Para bajar de GitHub Packages las convenciones de build y las librerías del proyecto
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -27,3 +31,8 @@ jobs:
       - name: Check
         # --continue: muestra todas las fallas juntas, no solo la primera
         run: ./gradlew check --continue
+        env:
+          # Credenciales para GitHub Packages. El token lo crea GitHub para cada corrida:
+          # no hay que configurar ningún secreto.
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ github.token }}
