@@ -15,6 +15,7 @@ Acá los pasos se definen **una vez**, y cada servicio los llama en una línea.
 | Workflow | Qué hace | Cuándo lo llama un servicio |
 |---|---|---|
 | `gradle-check.yml` | Baja el código del servicio, instala Java y Gradle, y corre `./gradlew check` | En cada pull request |
+| `docker-publish.yml` | Construye la imagen Docker del servicio y la sube a ghcr.io, con el hash del commit como tag | En cada push a `dev` o `main` |
 
 `./gradlew check` es lo que define cada servicio en su build: compilar, tests, ktlint, detekt y cobertura. Este workflow no sabe qué se verifica: solo lo ejecuta.
 
@@ -27,6 +28,31 @@ Acá los pasos se definen **una vez**, y cada servicio los llama en una línea.
 Corre con `--continue`: si fallan varias verificaciones, el log las muestra todas en una sola corrida, no solo la primera.
 
 Le pasa a Gradle las credenciales para bajar paquetes de GitHub Packages (`GITHUB_ACTOR` y `GITHUB_TOKEN`), con el token que GitHub crea para cada corrida. No hay que configurar ningún secreto.
+
+### `docker-publish.yml`
+
+No tiene inputs. Construye la imagen con el `Dockerfile` que esté en la raíz del servicio y la publica en `ghcr.io/<organización>/<servicio>:<hash del commit>`, todo en minúsculas porque ghcr.io no acepta mayúsculas.
+
+Devuelve el output `image` con el nombre completo de la imagen publicada, para que un paso posterior sepa qué desplegar.
+
+- **El tag es el hash del commit**, nunca `latest`: cada imagen apunta a un commit exacto, y volver atrás es elegir el hash anterior.
+- **El token de GitHub Packages entra como secret mount** del build, así que no queda en las capas de la imagen.
+- **Permisos:** el workflow que lo llama tiene que conceder `packages: write`. Un workflow reusable no puede tener más permisos que los que le da quien lo llama.
+
+```yaml
+name: Publish
+
+on:
+  push:
+    branches: [dev, main]
+
+jobs:
+  publish:
+    permissions:
+      contents: read
+      packages: write
+    uses: PPC-INGSIS/workflow/.github/workflows/docker-publish.yml@v3
+```
 
 ## Cómo usarlo en un servicio
 
@@ -85,12 +111,11 @@ Un workflow va acá solo si lo usan **dos o más repos**.
 | Va | No va |
 |---|---|
 | Verificar un servicio en cada pull request | El workflow que publica las convenciones de Gradle: lo usa un solo repo, y vive ahí |
-| Construir y publicar la imagen Docker de un servicio (pendiente) | Reglas de formato o de cobertura: ya están dentro de `./gradlew check` |
+| Construir y publicar la imagen Docker de un servicio | Reglas de formato o de cobertura: ya están dentro de `./gradlew check` |
 | Desplegar un servicio (pendiente) | |
 
 ## Qué falta
 
-- `docker-publish.yml`: construir la imagen de un servicio y subirla a GitHub Container Registry.
 - `deploy.yml`: desplegar la imagen publicada.
 
 Los tres forman una cadena: **verificar → empaquetar → desplegar**.
