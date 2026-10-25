@@ -16,6 +16,7 @@ Acá los pasos se definen **una vez**, y cada servicio los llama en una línea.
 |---|---|---|
 | `gradle-check.yml` | Baja el código del servicio, instala Java y Gradle, y corre `./gradlew check` | En cada pull request |
 | `docker-publish.yml` | Construye la imagen Docker del servicio y la sube a ghcr.io, con el hash del commit como tag | En cada push a `dev` o `main` |
+| `update-infra.yml` | Escribe el hash de la imagen publicada en `dev.env` del repo `infraestructura`, lo que dispara el deploy a dev | En cada push a `dev`, después de publicar la imagen |
 
 `./gradlew check` es lo que define cada servicio en su build: compilar, tests, ktlint, detekt y cobertura. Este workflow no sabe qué se verifica: solo lo ejecuta.
 
@@ -52,6 +53,46 @@ jobs:
       contents: read
       packages: write
     uses: PPC-INGSIS/workflow/.github/workflows/docker-publish.yml@v3
+```
+### `update-infra.yml`
+
+Escribe el hash de la imagen recién publicada en `dev.env` del repo `infraestructura`. Ese commit dispara el deploy a dev (el `deploy.yml` de `infraestructura` corre cuando cambia `dev.env`), así que un push a `dev` termina con la versión nueva corriendo, sin copiar ningún hash a mano.
+
+| Input | Obligatorio | Qué es |
+|---|---|---|
+| `image` | Sí | La imagen publicada: el output `image` de `docker-publish.yml` |
+| `tag-var` | Sí | La variable de `dev.env` que se actualiza: `SNIPPETS_TAG`, `PERMISSIONS_TAG` o `PRINTSCRIPT_TAG` |
+| `client-id` | Sí | Client ID de la GitHub App que escribe en `infraestructura` |
+
+| Secret | Qué es |
+|---|---|
+| `app-private-key` | Clave privada de esa GitHub App |
+
+- **No usa el token del repo que lo llama.** Escribe en otro repo y para eso el `github.token` no alcanza: pide un token a la GitHub App `ppc-ingsis-infra-updater`, que dura una hora y solo tiene acceso a `infraestructura`.
+- **Valida lo que recibe.** El tag tiene que ser un hash de commit de 40 caracteres, y la variable tiene que terminar en `_TAG` y existir en `dev.env`. Si no, falla sin tocar nada.
+- **Si otro servicio actualizó `dev.env` justo antes**, el push es rechazado y vuelve a empezar desde `main` (hasta 5 intentos). Los dos cambios quedan.
+- **Si el valor ya está, no hace nada.**
+- **Solo para `dev`.** El servicio lo llama únicamente en los pushes a `dev`. Prod no se actualiza sola: `prod.env` se cambia a mano.
+- **Requisitos:** la App instalada en `infraestructura`, y el secret `INFRA_APP_PRIVATE_KEY` y la variable `INFRA_APP_CLIENT_ID` en la organización, visibles para el servicio.
+
+```yaml
+jobs:
+  publish:
+    permissions:
+      contents: read
+      packages: write
+    uses: PPC-INGSIS/workflow/.github/workflows/docker-publish.yml@v4
+
+  update-infra:
+    needs: publish
+    if: github.ref_name == 'dev'
+    uses: PPC-INGSIS/workflow/.github/workflows/update-infra.yml@v4
+    with:
+      image: ${{ needs.publish.outputs.image }}
+      tag-var: SNIPPETS_TAG
+      client-id: ${{ vars.INFRA_APP_CLIENT_ID }}
+    secrets:
+      app-private-key: ${{ secrets.INFRA_APP_PRIVATE_KEY }}
 ```
 
 ## Cómo usarlo en un servicio
