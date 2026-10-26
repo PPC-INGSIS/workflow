@@ -1,7 +1,7 @@
 name: Update infra
 
-# Escribe el hash de la imagen recién publicada en dev.env del repo infraestructura.
-# Un commit nuevo en dev.env dispara el deploy a dev (ver deploy.yml en infraestructura).
+# Escribe el hash de la imagen recién publicada en versiones.env, en la rama dev del repo infraestructura.
+# Un commit nuevo en versiones.env de dev dispara el deploy a dev (ver deploy.yml en infraestructura).
 
 on:
   # Solo corre cuando otro workflow lo llama, nunca solo
@@ -12,7 +12,7 @@ on:
         type: string
         required: true
       tag-var:
-        description: "Variable de dev.env que se actualiza, por ejemplo SNIPPETS_TAG"
+        description: "Variable de versiones.env que se actualiza, por ejemplo SNIPPETS_TAG"
         type: string
         required: true
       client-id:
@@ -44,10 +44,10 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: ${{ github.repository_owner }}/infraestructura
-          ref: main
+          ref: dev
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Actualizar dev.env
+      - name: Actualizar versiones.env
         env:
           IMAGE: ${{ inputs.image }}
           TAG_VAR: ${{ inputs.tag-var }}
@@ -58,26 +58,26 @@ jobs:
           sha="${IMAGE##*:}"
           [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::El tag de la imagen no es un hash de commit: $sha"; exit 1; }
           [[ "$TAG_VAR" =~ ^[A-Z]+_TAG$ ]] || { echo "::error::Nombre de variable inválido: $TAG_VAR"; exit 1; }
-          grep -q "^${TAG_VAR}=" dev.env || { echo "::error::dev.env no tiene la variable $TAG_VAR"; exit 1; }
+          grep -q "^${TAG_VAR}=" versiones.env || { echo "::error::versiones.env no tiene la variable $TAG_VAR"; exit 1; }
 
           git config user.name "ppc-ingsis-infra-updater[bot]"
           git config user.email "ppc-ingsis-infra-updater[bot]@users.noreply.github.com"
 
-          # Si otro servicio actualizó dev.env en el medio, el push es rechazado: se parte de
-          # cero desde main y se vuelve a aplicar el cambio, en lugar de resolver conflictos.
+          # Si otro servicio actualizó versiones.env en el medio, el push es rechazado: se parte de
+          # cero desde dev y se vuelve a aplicar el cambio, en lugar de resolver conflictos.
           for intento in 1 2 3 4 5; do
-            git fetch --quiet origin main
-            git reset --quiet --hard origin/main
+            git fetch --quiet origin dev
+            git reset --quiet --hard origin/dev
 
-            sed -i "s/^${TAG_VAR}=.*/${TAG_VAR}=${sha}/" dev.env
+            sed -i "s/^${TAG_VAR}=.*/${TAG_VAR}=${sha}/" versiones.env
             if git diff --quiet; then
-              echo "dev.env ya tiene ${TAG_VAR}=${sha}: no hay nada que hacer"
+              echo "versiones.env ya tiene ${TAG_VAR}=${sha}: no hay nada que hacer"
               exit 0
             fi
 
-            git commit --quiet -m "dev: ${TAG_VAR} -> ${sha:0:7} (${ORIGEN})" dev.env
-            if git push --quiet origin HEAD:main; then
-              echo "dev.env actualizado: ${TAG_VAR}=${sha}"
+            git commit --quiet -m "dev: ${TAG_VAR} -> ${sha:0:7} (${ORIGEN})" versiones.env
+            if git push --quiet origin HEAD:dev; then
+              echo "versiones.env actualizado: ${TAG_VAR}=${sha}"
               exit 0
             fi
 
@@ -85,5 +85,5 @@ jobs:
             sleep $((RANDOM % 5 + 1))
           done
 
-          echo "::error::No se pudo actualizar dev.env después de 5 intentos"
+          echo "::error::No se pudo actualizar versiones.env después de 5 intentos"
           exit 1
